@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Tasks</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="todo.css"/>
+</head>
+<body>
+<div class="app">
+
+  <header class="header">
+    <div>
+      <p class="header-sub">안녕하세요 👋</p>
+      <h1 class="header-title">나의 할 일</h1>
+    </div>
+    <div class="header-avatar">T</div>
+  </header>
+
+  <nav class="main-tabs">
+    <button class="main-tab active" data-tab="list">목록</button>
+    <button class="main-tab" data-tab="calendar">달력</button>
+  </nav>
+
+  <main class="content">
+
+    <!-- 목록 탭 -->
+    <section class="pane active" id="pane-list">
+      <div class="status-bar">
+        <button class="status-pill active" data-s="all">전체</button>
+        <button class="status-pill" data-s="ongoing">진행중</button>
+        <button class="status-pill" data-s="upcoming">예정</button>
+        <button class="status-pill" data-s="completed">완료</button>
+      </div>
+      <div class="feed" id="listFeed"></div>
+      <p class="empty-state" id="listEmpty">할 일이 없습니다 🎉</p>
+    </section>
+
+    <!-- 달력 탭 -->
+    <section class="pane" id="pane-calendar">
+      <div class="cal-card">
+        <div class="cal-nav">
+          <button id="prevMonth" class="cal-arrow">&#8249;</button>
+          <span id="calLabel" class="cal-month-label"></span>
+          <button id="nextMonth" class="cal-arrow">&#8250;</button>
+        </div>
+        <div class="cal-dow">
+          <span>일</span><span>월</span><span>화</span>
+          <span>수</span><span>목</span><span>금</span><span>토</span>
+        </div>
+        <div class="cal-grid" id="calGrid"></div>
+      </div>
+      <div class="cal-bottom">
+        <p class="cal-sel-label" id="calSelLabel"></p>
+        <div class="feed" id="calFeed"></div>
+        <p class="empty-state" id="calEmpty">이 날에는 할 일이 없습니다.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <button class="fab" id="fab" aria-label="할 일 추가">+</button>
+</div>
+
+<!-- 할 일 모달 (바텀 시트) -->
+<div class="backdrop" id="backdrop">
+  <dialog class="sheet" id="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <button class="sheet-back" id="sheetClose" aria-label="닫기">&#8592;</button>
+      <h2 class="sheet-title" id="sheetTitle">할 일 만들기</h2>
+    </div>
+    <div class="sheet-body">
+      <div class="field">
+        <label for="fName">할 일 이름</label>
+        <input type="text" id="fName" placeholder="할 일을 입력하세요"/>
+      </div>
+      <div class="field">
+        <label for="fDate">날짜</label>
+        <input type="date" id="fDate"/>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="fStart">시작 시간</label>
+          <input type="time" id="fStart"/>
+        </div>
+        <div class="field">
+          <label for="fEnd">종료 시간</label>
+          <input type="time" id="fEnd"/>
+        </div>
+      </div>
+      <div class="field">
+        <label for="fLocation">장소</label>
+        <input type="text" id="fLocation" placeholder="장소를 입력하세요"/>
+      </div>
+      <fieldset class="field field-set">
+        <legend class="field-group-label">중요도</legend>
+        <div class="seg-group" id="priorityGroup">
+          <button class="seg high" data-p="high">높음</button>
+          <button class="seg medium active" data-p="medium">보통</button>
+          <button class="seg low" data-p="low">낮음</button>
+        </div>
+      </fieldset>
+      <fieldset class="field field-set">
+        <legend class="field-group-label">레이블</legend>
+        <div class="chip-group" id="labelGroup">
+          <button class="chip work active" data-l="work">업무</button>
+          <button class="chip personal" data-l="personal">개인</button>
+          <button class="chip meeting" data-l="meeting">미팅</button>
+          <button class="chip study" data-l="study">학습</button>
+          <button class="chip health" data-l="health">건강</button>
+        </div>
+      </fieldset>
+      <div class="field">
+        <label for="fDesc">설명 (선택)</label>
+        <textarea id="fDesc" placeholder="설명을 입력하세요" rows="3"></textarea>
+      </div>
+    </div>
+    <div class="sheet-footer">
+      <button class="btn-primary" id="submitBtn">할 일 만들기</button>
+    </div>
+  </dialog>
+</div>
+
+<script type="module" src="todo.js"></script>
+</body>
+</html>
