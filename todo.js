@@ -1,29 +1,11 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
-import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-analytics.js";
-import { getDatabase, ref, push, remove, update, onValue } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-database.js";
-
-const firebaseConfig = {
-  apiKey: "AIzaSyCCkUMLIB_5D2gXrOv05mHySbyC9J9yRHQ",
-  authDomain: "ssam-todo.firebaseapp.com",
-  projectId: "ssam-todo",
-  storageBucket: "ssam-todo.firebasestorage.app",
-  messagingSenderId: "7516078529",
-  appId: "1:7516078529:web:826c1694a939b8ea352f40",
-  measurementId: "G-8LC9WGWNZ0",
-  databaseURL: "https://ssam-todo-default-rtdb.firebaseio.com/"
-};
-
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
-const db = getDatabase(app);
-const tasksRef = ref(db, 'todos');
+const API = 'http://localhost:5000/todos';
 
 // ── 상태 ───────────────────────────────
 let tasks      = {};
 let activeTab    = 'list';
 let activeFilter = 'all';
 let calYear    = new Date().getFullYear();
-let calMonth   = new Date().getMonth();   // 0-indexed
+let calMonth   = new Date().getMonth();
 let calSelected  = todayStr();
 let editKey    = null;
 let selPriority  = 'medium';
@@ -50,29 +32,60 @@ function formatTimeRange(s, e) {
 }
 
 function getStatus(task) {
-  if (task.done) return 'completed';
-  return (task.date || todayStr()) > todayStr() ? 'upcoming' : 'ongoing';
+  if (task.status === 'completed') return 'completed';
+  const dateStr = task.date ? task.date.slice(0, 10) : todayStr();
+  return dateStr > todayStr() ? 'upcoming' : 'ongoing';
 }
 
 const LABEL_KR    = { work:'업무', personal:'개인', meeting:'미팅', study:'학습', health:'건강' };
 const PRIORITY_KR = { high:'높음', medium:'보통', low:'낮음' };
 
-// ── Firebase ────────────────────────────
-onValue(tasksRef, snap => {
-  tasks = snap.val() || {};
-  rerender();
-}, err => console.error('[Firebase] 읽기 실패:', err.message));
-
-function dbAdd(data) {
-  push(tasksRef, data).catch(e => console.error('[Firebase] 추가 실패:', e.message));
+// ── API ────────────────────────────────
+async function loadTasks() {
+  try {
+    const res  = await fetch(API);
+    const list = await res.json();
+    tasks = {};
+    list.forEach(t => { tasks[t._id] = t; });
+    rerender();
+  } catch (e) {
+    console.error('할 일 불러오기 실패:', e.message);
+  }
 }
 
-function dbUpdate(key, data) {
-  update(ref(db, `todos/${key}`), data).catch(e => console.error('[Firebase] 수정 실패:', e.message));
+async function dbAdd(data) {
+  try {
+    await fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    await loadTasks();
+  } catch (e) {
+    console.error('추가 실패:', e.message);
+  }
 }
 
-function dbRemove(key) {
-  remove(ref(db, `todos/${key}`)).catch(e => console.error('[Firebase] 삭제 실패:', e.message));
+async function dbUpdate(id, data) {
+  try {
+    await fetch(`${API}/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    await loadTasks();
+  } catch (e) {
+    console.error('수정 실패:', e.message);
+  }
+}
+
+async function dbRemove(id) {
+  try {
+    await fetch(`${API}/${id}`, { method: 'DELETE' });
+    await loadTasks();
+  } catch (e) {
+    console.error('삭제 실패:', e.message);
+  }
 }
 
 // ── 렌더 진입점 ─────────────────────────
@@ -83,25 +96,26 @@ function rerender() {
 
 // ── 카드 생성 ───────────────────────────
 function createCard(key, task) {
+  const isDone = task.status === 'completed';
   const el = document.createElement('article');
-  el.className = `card priority-${task.priority || 'medium'}${task.done ? ' card--done' : ''}`;
+  el.className = `card priority-${task.priority || 'medium'}${isDone ? ' card--done' : ''}`;
 
-  const timeStr  = formatTimeRange(task.startTime, task.endTime);
-  const label    = task.label    || 'work';
-  const labelKR  = LABEL_KR[label]  || label;
+  const timeStr = formatTimeRange(task.startTime, task.endTime);
+  const label   = task.label || 'work';
+  const labelKR = LABEL_KR[label] || label;
 
   el.innerHTML = `
     <div class="card-top">
       <span class="label-chip label-${label}">${labelKR}</span>
       ${timeStr ? `<span class="time-chip">${timeStr}</span>` : ''}
     </div>
-    <p class="card-name${task.done ? ' card-name--done' : ''}">${escHtml(task.text)}</p>
-    ${task.location ? `<p class="card-meta"><span>📍</span>${escHtml(task.location)}</p>` : ''}
-    ${task.desc     ? `<p class="card-desc">${escHtml(task.desc)}</p>`                   : ''}
+    <p class="card-name${isDone ? ' card-name--done' : ''}">${escHtml(task.name)}</p>
+    ${task.location    ? `<p class="card-meta"><span>📍</span>${escHtml(task.location)}</p>`    : ''}
+    ${task.description ? `<p class="card-desc">${escHtml(task.description)}</p>`                : ''}
     <div class="card-actions">
       <label class="done-label">
-        <input type="checkbox" class="done-cb"${task.done ? ' checked' : ''}/>
-        <span class="done-text">${task.done ? '완료' : '미완료'}</span>
+        <input type="checkbox" class="done-cb"${isDone ? ' checked' : ''}/>
+        <span class="done-text">${isDone ? '완료' : '미완료'}</span>
       </label>
       <div class="card-btns">
         <button class="card-btn edit-btn" title="수정">✎</button>
@@ -109,7 +123,9 @@ function createCard(key, task) {
       </div>
     </div>`;
 
-  el.querySelector('.done-cb').addEventListener('change', () => dbUpdate(key, { done: !task.done }));
+  el.querySelector('.done-cb').addEventListener('change', () => {
+    dbUpdate(key, { status: isDone ? 'upcoming' : 'completed' });
+  });
   el.querySelector('.edit-btn').addEventListener('click', () => openModal(key));
   el.querySelector('.del-btn').addEventListener('click', () => dbRemove(key));
 
@@ -118,8 +134,10 @@ function createCard(key, task) {
 
 function escHtml(str) {
   return String(str)
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
 }
 
 // ── 목록 탭 ─────────────────────────────
@@ -130,12 +148,10 @@ function renderList() {
 
   let entries = Object.entries(tasks);
 
-  // 상태 필터
   if (activeFilter !== 'all') {
     entries = entries.filter(([, t]) => getStatus(t) === activeFilter);
   }
 
-  // 날짜순 정렬
   entries.sort((a, b) => (a[1].date || todayStr()).localeCompare(b[1].date || todayStr()));
 
   if (entries.length === 0) {
@@ -144,16 +160,16 @@ function renderList() {
   }
   empty.hidden = true;
 
-  // 날짜별 그룹핑
   const groups = {};
   entries.forEach(([k, t]) => {
-    const d = t.date || todayStr();
-    (groups[d] = groups[d] || []).push([k, t]);
+    const d = t.date ? t.date.slice(0, 10) : todayStr();
+    if (!groups[d]) groups[d] = [];
+    groups[d].push([k, t]);
   });
 
   const today = todayStr();
   Object.entries(groups).forEach(([date, items]) => {
-    const group  = document.createElement('div');
+    const group = document.createElement('div');
     group.className = 'date-group';
 
     const header = document.createElement('p');
@@ -181,17 +197,15 @@ function renderCalendar() {
   const firstDay  = new Date(calYear, calMonth, 1).getDay();
   const daysInMon = new Date(calYear, calMonth + 1, 0).getDate();
 
-  // 빈 셀
   for (let i = 0; i < firstDay; i++) {
     const cell = document.createElement('div');
     cell.className = 'cal-cell empty';
     grid.appendChild(cell);
   }
 
-  // 날짜 셀
   for (let d = 1; d <= daysInMon; d++) {
     const dateStr  = `${calYear}-${pad(calMonth+1)}-${pad(d)}`;
-    const hasTasks = Object.values(tasks).some(t => t.date === dateStr);
+    const hasTasks = Object.values(tasks).some(t => t.date?.slice(0, 10) === dateStr);
     const isToday  = dateStr === today;
     const isSel    = dateStr === calSelected;
 
@@ -216,7 +230,7 @@ function renderCalTasks() {
   label.textContent = calSelected ? formatDateKR(calSelected) : '';
   feed.innerHTML = '';
 
-  const entries = Object.entries(tasks).filter(([, t]) => t.date === calSelected);
+  const entries = Object.entries(tasks).filter(([, t]) => t.date?.slice(0, 10) === calSelected);
   if (entries.length === 0) { empty.hidden = false; return; }
   empty.hidden = true;
   entries.forEach(([k, t]) => feed.appendChild(createCard(k, t)));
@@ -228,16 +242,16 @@ function openModal(key = null) {
   const isEdit = key && tasks[key];
 
   document.getElementById('sheetTitle').textContent = isEdit ? '할 일 수정' : '할 일 만들기';
-  document.getElementById('submitBtn').textContent  = isEdit ? '수정 완료'   : '할 일 만들기';
+  document.getElementById('submitBtn').textContent  = isEdit ? '수정 완료'  : '할 일 만들기';
 
   if (isEdit) {
     const t = tasks[key];
-    document.getElementById('fName').value     = t.text      || '';
-    document.getElementById('fDate').value     = t.date      || '';
-    document.getElementById('fStart').value    = t.startTime || '';
-    document.getElementById('fEnd').value      = t.endTime   || '';
-    document.getElementById('fLocation').value = t.location  || '';
-    document.getElementById('fDesc').value     = t.desc      || '';
+    document.getElementById('fName').value     = t.name        || '';
+    document.getElementById('fDate').value     = t.date ? t.date.slice(0, 10) : '';
+    document.getElementById('fStart').value    = t.startTime   || '';
+    document.getElementById('fEnd').value      = t.endTime     || '';
+    document.getElementById('fLocation').value = t.location    || '';
+    document.getElementById('fDesc').value     = t.description || '';
     selPriority = t.priority || 'medium';
     selLabel    = t.label    || 'work';
   } else {
@@ -277,15 +291,14 @@ function submitTask() {
   if (!name) { document.getElementById('fName').focus(); return; }
 
   const data = {
-    text:      name,
-    date:      document.getElementById('fDate').value     || todayStr(),
-    startTime: document.getElementById('fStart').value    || '',
-    endTime:   document.getElementById('fEnd').value      || '',
-    location:  document.getElementById('fLocation').value.trim(),
-    desc:      document.getElementById('fDesc').value.trim(),
-    priority:  selPriority,
-    label:     selLabel,
-    done: editKey && tasks[editKey] ? tasks[editKey].done : false,
+    name,
+    date:        document.getElementById('fDate').value     || todayStr(),
+    startTime:   document.getElementById('fStart').value    || '',
+    endTime:     document.getElementById('fEnd').value      || '',
+    location:    document.getElementById('fLocation').value.trim(),
+    description: document.getElementById('fDesc').value.trim(),
+    priority:    selPriority,
+    label:       selLabel,
   };
 
   if (editKey) dbUpdate(editKey, data);
@@ -295,8 +308,6 @@ function submitTask() {
 }
 
 // ── 이벤트 ───────────────────────────────
-
-// 메인 탭
 document.querySelectorAll('.main-tab').forEach(btn => {
   btn.addEventListener('click', () => {
     activeTab = btn.dataset.tab;
@@ -308,7 +319,6 @@ document.querySelectorAll('.main-tab').forEach(btn => {
   });
 });
 
-// 상태 필터
 document.querySelectorAll('.status-pill').forEach(btn => {
   btn.addEventListener('click', () => {
     activeFilter = btn.dataset.s;
@@ -318,7 +328,6 @@ document.querySelectorAll('.status-pill').forEach(btn => {
   });
 });
 
-// 달력 이전/다음 달
 document.getElementById('prevMonth').addEventListener('click', () => {
   if (--calMonth < 0) { calMonth = 11; calYear--; }
   renderCalendar();
@@ -328,23 +337,22 @@ document.getElementById('nextMonth').addEventListener('click', () => {
   renderCalendar();
 });
 
-// FAB / 모달 닫기
 document.getElementById('fab').addEventListener('click', () => openModal());
 document.getElementById('sheetClose').addEventListener('click', closeModal);
 document.getElementById('backdrop').addEventListener('click', e => {
   if (e.target === document.getElementById('backdrop')) closeModal();
 });
 
-// 중요도 선택
 document.querySelectorAll('#priorityGroup .seg').forEach(btn => {
   btn.addEventListener('click', () => { selPriority = btn.dataset.p; syncPriorityUI(); });
 });
 
-// 레이블 선택
 document.querySelectorAll('#labelGroup .chip').forEach(btn => {
   btn.addEventListener('click', () => { selLabel = btn.dataset.l; syncLabelUI(); });
 });
 
-// 제출
 document.getElementById('submitBtn').addEventListener('click', submitTask);
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+// ── 초기 로드 ────────────────────────────
+await loadTasks();
